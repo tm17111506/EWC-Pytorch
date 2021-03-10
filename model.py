@@ -13,7 +13,8 @@ class MLP(nn.Module):
                  hidden_layer_num=2,
                  hidden_dropout_prob=.5,
                  input_dropout_prob=.2,
-                 lamda=40):
+                 lamda=40,
+                 permute_idx=0):
         # Configurations.
         super().__init__()
         self.input_size = input_size
@@ -23,18 +24,34 @@ class MLP(nn.Module):
         self.hidden_dropout_prob = hidden_dropout_prob
         self.output_size = output_size
         self.lamda = lamda
+        self.permute_idx=permute_idx
 
         # Layers.
-        self.layers = nn.ModuleList([
-            # input
+        layers_list = [
             nn.Linear(self.input_size, self.hidden_size), nn.ReLU(),
-            nn.Dropout(self.input_dropout_prob),
-            # hidden
-            *((nn.Linear(self.hidden_size, self.hidden_size), nn.ReLU(),
-               nn.Dropout(self.hidden_dropout_prob)) * self.hidden_layer_num),
-            # output
-            nn.Linear(self.hidden_size, self.output_size)
-        ])
+            nn.Dropout(self.input_dropout_prob)
+        ]
+
+        for i in range(self.hidden_layer_num):
+            layers_list.append(nn.Linear(self.hidden_size, self.hidden_size))
+            layers_list.append(nn.ReLU())
+            layers_list.append(nn.Dropout(self.hidden_dropout_prob))
+
+        layers_list.append(nn.Linear(self.hidden_size, self.output_size))
+        self.layers = nn.ModuleList(layers_list)
+
+        # self.layers = nn.ModuleList([
+        #     # input
+        #     nn.Linear(self.input_size, self.hidden_size), nn.ReLU(),
+        #     nn.Dropout(self.input_dropout_prob),
+        #     # hidden
+        #     nn.Linear(self.hidden_size, self.hidden_size), nn.ReLU(),
+        #        nn.Dropout(self.hidden_dropout_prob),
+        #     nn.Linear(self.hidden_size, self.hidden_size), nn.ReLU(),
+        #        nn.Dropout(self.hidden_dropout_prob),
+        #     # output
+        #     nn.Linear(self.hidden_size, self.output_size)
+        # ])
 
     @property
     def name(self):
@@ -44,6 +61,7 @@ class MLP(nn.Module):
             '-in{input_size}-out{output_size}'
             '-h{hidden_size}x{hidden_layer_num}'
             '-dropout_in{input_dropout_prob}_hidden{hidden_dropout_prob}'
+            '-permute_idx{permute_idx}'
         ).format(
             lamda=self.lamda,
             input_size=self.input_size,
@@ -52,6 +70,7 @@ class MLP(nn.Module):
             hidden_layer_num=self.hidden_layer_num,
             input_dropout_prob=self.input_dropout_prob,
             hidden_dropout_prob=self.hidden_dropout_prob,
+            permute_idx=self.permute_idx,
         )
 
     def forward(self, x):
@@ -81,6 +100,10 @@ class MLP(nn.Module):
         param_names = [
             n.replace('.', '__') for n, p in self.named_parameters()
         ]
+        # for n, p in self.named_parameters():
+        #     if p.requires_grad:
+        #         print(n)
+
         return {n: f.detach() for n, f in zip(param_names, fisher_diagonals)}
 
     def consolidate(self, fisher):
